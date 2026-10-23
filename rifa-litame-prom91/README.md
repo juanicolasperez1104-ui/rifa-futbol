@@ -59,3 +59,4 @@ GitHub Pages no ejecuta el servidor/API que usa esta app, por lo que subirla all
 - Las reservas son atómicas: si otro comprador toma primero una boleta seleccionada, no se guardan reservas parciales.
 
 El panel se abre desde el pie de página con **Acceso del organizador**. En modo compartido, la sesión administrativa dura ocho horas. El pago se coordina directamente con el organizador a través de Nequi `@3133264421`; esta app no procesa pagos.
+Actualización para el despliegue
