@@ -8,6 +8,15 @@ const supabase = live ? createClient(supabaseUrl, supabaseKey) : null;
 const STORE = 'litame-prom91-raffle-demo-v1';
 const emptyTickets = () => Object.fromEntries(Array.from({ length: 100 }, (_, n) => [n, { number: n, status: 'available', name: '', phone: '' }]));
 
+async function readApiResponse(response) {
+  const text = await response.text();
+  let result;
+  try { result = text ? JSON.parse(text) : {}; }
+  catch { throw new Error('El servicio de reservas no respondió correctamente. La boleta podría haberse reservado: actualiza el tablero antes de volver a intentarlo.'); }
+  if (!response.ok) throw new Error(result.error || 'No fue posible completar la reserva. Actualiza el tablero e intenta de nuevo.');
+  return result;
+}
+
 function App() {
   const [tickets, setTickets] = useState(emptyTickets);
   const [adminDetails, setAdminDetails] = useState({});
@@ -18,6 +27,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [receipt, setReceipt] = useState(null);
 
   const syncLocal = (next) => {
     setTickets(next);
@@ -63,17 +73,20 @@ function App() {
   };
   const reserve = async (e) => {
     e.preventDefault(); if (!selected.length || !buyer.name.trim() || !buyer.phone.trim()) return;
+    const reservedNumbers = [...selected];
+    const reservedBuyer = { name: buyer.name.trim(), phone: buyer.phone.trim() };
     setLoading(true); setNotice('');
     try {
       if (!live) {
         const next = { ...tickets };
-        for (const n of selected) { if (next[n].status !== 'available') throw new Error(`La boleta ${String(n).padStart(2,'0')} acaba de ser tomada.`); next[n] = { ...next[n], status: 'held', name: buyer.name.trim(), phone: buyer.phone.trim() }; }
+        for (const n of reservedNumbers) { if (next[n].status !== 'available') throw new Error(`La boleta ${String(n).padStart(2,'0')} acaba de ser tomada.`); next[n] = { ...next[n], status: 'held', name: reservedBuyer.name, phone: reservedBuyer.phone }; }
         syncLocal(next);
       } else {
-        const response = await fetch('/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ numbers: selected, name: buyer.name.trim(), phone: buyer.phone.trim() }) });
-        const result = await response.json(); if (!response.ok) throw new Error(result.error || 'No fue posible reservar.'); await load();
+        const response = await fetch('/api/reservations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ numbers: reservedNumbers, name: reservedBuyer.name, phone: reservedBuyer.phone }) });
+        await readApiResponse(response); await load();
       }
-      setNotice(`¡Listo! Separaste las boletas ${selected.map(n => String(n).padStart(2,'0')).join(', ')}. Envía el pago por Nequi a @3133264421 y comparte el comprobante.`);
+      setReceipt({ ...reservedBuyer, numbers: reservedNumbers, date: new Date() });
+      setNotice(`¡Listo! Separaste las boletas ${reservedNumbers.map(n => String(n).padStart(2,'0')).join(', ')}. Envía el pago a la Llave @3133264421 y comparte el comprobante.`);
       setSelected([]); setBuyer({ name: '', phone: '' });
     } catch (err) { setNotice(err.message || 'Ocurrió un error. Intenta de nuevo.'); await load(); }
     finally { setLoading(false); }
@@ -104,7 +117,7 @@ function App() {
       <div className="event-cards">
         <div className="event-card blue"><span className="event-icon">🎟️</span><div><small>VALOR DE LA BOLETA</small><strong>$10.000</strong><small>PESOS</small></div></div>
         <div className="event-card yellow"><span className="event-icon">🏆</span><div><small>PREMIO</small><strong>$250.000</strong><small>PESOS</small></div></div>
-        <div className="event-card blue payment"><span className="event-icon">📲</span><div><small>PAGO POR NEQUI</small><strong className="key">@3133264421</strong><small>Envía el comprobante al organizador</small></div></div>
+        <div className="event-card blue payment"><span className="event-icon">📲</span><div><small>LLAVE DE PAGO</small><strong className="key">Llave: @3133264421</strong><small>Envía el comprobante al organizador</small></div></div>
       </div>
     </header>
 
@@ -117,9 +130,18 @@ function App() {
 
     <section className="booking" id="reserva">
       <div className="booking-copy"><p className="kicker">TU APOYO HACE LA DIFERENCIA</p><h2>{selected.length ? `Vas a separar ${selected.length} ${selected.length===1?'boleta':'boletas'}` : 'Separa tus boletas'}</h2><p>Escribe tus datos y los números quedarán reservados para ti.</p>{selected.length>0&&<div className="chosen">{selected.map(n=><span key={n}>{String(n).padStart(2,'0')}</span>)}</div>}</div>
-      <form className="booking-form" onSubmit={reserve}><label>Nombre completo<input required maxLength="80" value={buyer.name} onChange={e=>setBuyer({...buyer,name:e.target.value})} placeholder="¿Cómo te llamas?" /></label><label>Teléfono / WhatsApp<input required maxLength="30" value={buyer.phone} onChange={e=>setBuyer({...buyer,phone:e.target.value})} placeholder="Tu número de contacto" /></label><button className="primary" disabled={!selected.length||loading}>{loading?'Procesando…':`Separar ${selected.length||''} ${selected.length===1?'boleta':'boletas'}`}</button><small>Después de reservar, realiza el pago de $10.000 por cada boleta a <b>@3133264421</b>.</small></form>
+      <form className="booking-form" onSubmit={reserve}><label>Nombre completo<input required maxLength="80" value={buyer.name} onChange={e=>setBuyer({...buyer,name:e.target.value})} placeholder="¿Cómo te llamas?" /></label><label>Teléfono / WhatsApp<input required maxLength="30" value={buyer.phone} onChange={e=>setBuyer({...buyer,phone:e.target.value})} placeholder="Tu número de contacto" /></label><button className="primary" disabled={!selected.length||loading}>{loading?'Procesando…':`Separar ${selected.length||''} ${selected.length===1?'boleta':'boletas'}`}</button><small>Después de reservar, realiza el pago de $10.000 por cada boleta a la Llave <b>@3133264421</b>.</small></form>
     </section>
     {notice&&<div className="notice" role="status">{notice}<button onClick={()=>setNotice('')} aria-label="Cerrar">×</button></div>}
+
+    {receipt&&<section className="receipt-wrap" aria-live="polite"><article className="receipt" id="ticket-receipt">
+      <div className="receipt-top"><span>⚽</span><div><small>COMPROBANTE DE RESERVA</small><h2>BONO SOLIDARIO</h2><b>EQUIPO FÚTBOL LITAME PROM91</b></div><span>⚽</span></div>
+      <div className="receipt-state">BOLETA(S) SEPARADA(S) · PENDIENTE DE PAGO</div>
+      <div className="receipt-numbers">{receipt.numbers.map(n=><span key={n}>{String(n).padStart(2,'0')}</span>)}</div>
+      <div className="receipt-info"><div><small>PARTICIPANTE</small><b>{receipt.name}</b></div><div><small>TELÉFONO / WHATSAPP</small><b>{receipt.phone}</b></div><div><small>VALOR TOTAL</small><b>${(receipt.numbers.length*10000).toLocaleString('es-CO')} COP</b></div><div><small>PREMIO</small><b>$250.000 COP</b></div></div>
+      <div className="receipt-payment">Realiza el pago de <b>$10.000 por boleta</b> a la Llave <b>@3133264421</b>. La reserva queda pendiente hasta que el organizador confirme el pago.</div>
+      <small className="receipt-date">Generado el {receipt.date.toLocaleString('es-CO')}</small>
+    </article><div className="receipt-actions"><button className="primary" onClick={()=>window.print()}>Imprimir o guardar como PDF</button><button className="text-button" onClick={()=>setReceipt(null)}>Cerrar comprobante</button></div><p className="receipt-help">En la ventana de impresión, selecciona “Guardar como PDF” para descargarlo o imprimirlo.</p></section>}
 
     <footer><div className="thanks">¡Gracias por tu apoyo! <span>♡</span></div><p>Unidos por el Equipo Fútbol Litame PROM91</p><button className="admin-toggle" onClick={()=>setAdminOpen(v=>!v)}>{admin?'Administrar boletas':adminOpen?'Cerrar administración':'Acceso del organizador'}</button>
       {adminOpen&&<div className="admin-panel">{!admin?<form className="admin-login" onSubmit={login}><strong>Panel del organizador</strong><label>Clave de administración<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Ingresa tu clave" /></label><button className="primary" disabled={loading}>Ingresar</button>{!live&&<small>En modo demostración, la clave es <b>demo123</b>.</small>}</form>:<><div className="admin-head"><strong>Boletas separadas y pagadas</strong><button className="text-button" onClick={logout}>Cerrar sesión</button></div><div className="admin-list">{Object.values(tickets).filter(t=>t.status!=='available').sort((a,b)=>a.number-b.number).map(t=>{const details=adminDetails[t.number]||t;return <div className="admin-row" key={t.number}><span className={`mini-ticket ${t.status}`}>{String(t.number).padStart(2,'0')}</span><div className="buyer-info"><b>{details.name||'Cargando datos…'}</b><small>{details.phone||''} · {t.status==='held'?'Separada':'Pagada'}</small></div>{t.status==='held'&&<button className="paid-button" onClick={()=>setStatus(t.number,'paid')} disabled={loading}>Marcar pagada</button>}<button className="release-button" onClick={()=>setStatus(t.number,'available')} disabled={loading}>Liberar</button></div>})}{!Object.values(tickets).some(t=>t.status!=='available')&&<p className="empty">Todavía no hay boletas separadas.</p>}</div></>}</div>}
