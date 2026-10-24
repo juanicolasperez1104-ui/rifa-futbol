@@ -12,8 +12,8 @@ async function readApiResponse(response) {
   const text = await response.text();
   let result;
   try { result = text ? JSON.parse(text) : {}; }
-  catch { throw new Error('El servicio de reservas no respondió correctamente. La boleta podría haberse reservado: actualiza el tablero antes de volver a intentarlo.'); }
-  if (!response.ok) throw new Error(result.error || 'No fue posible completar la reserva. Actualiza el tablero e intenta de nuevo.');
+  catch { throw new Error(`El servicio de reservas no respondió correctamente (código ${response.status}). La boleta podría haberse reservado: actualiza el tablero antes de volver a intentarlo.`); }
+  if (!response.ok) throw new Error((result.error || 'No fue posible completar la reserva. Actualiza el tablero e intenta de nuevo.') + (result.reason ? ` [${result.reason}]` : ''));
   return result;
 }
 
