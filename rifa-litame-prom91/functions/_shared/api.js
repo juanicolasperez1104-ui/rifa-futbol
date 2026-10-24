@@ -11,11 +11,14 @@ export async function supabase(env, path, init = {}) {
   const base = env.SUPABASE_URL?.replace(/\/$/, '');
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) return { response: null, error: 'Database is not configured.' };
+  // Supabase sb_secret_* keys are API keys, not JWTs, so send them in apikey only.
+  // Legacy service_role JWTs still need Authorization: Bearer for PostgREST.
+  const authHeaders = key.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${key}` };
   const response = await fetch(`${base}/rest/v1/${path}`, {
     ...init,
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
+      ...authHeaders,
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...init.headers,
     },
