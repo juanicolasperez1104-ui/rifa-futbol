@@ -17,7 +17,7 @@ export async function onRequestPost({ request, env }) {
     const result = await supabase(env, 'rpc/reserve_raffle_tickets', {
       method: 'POST', body: JSON.stringify({ p_numbers: numbers, p_name: name, p_phone: phone }),
     });
-    if (result.error) return json({ error: 'La base de datos no está configurada.' }, 503);
+    if (result.error) return json({ error: `La base de datos no está configurada: ${result.error}` }, 503);
     if (!result.response.ok) {
       const detail = await result.response.text();
       console.error('Reservation failed:', result.response.status, detail);
@@ -35,7 +35,8 @@ export async function onRequestPost({ request, env }) {
     }
     return json({ ok: true, tickets });
   } catch (error) {
-    const reason = `${error?.name || 'Error'}: ${String(error?.message || 'sin detalle').slice(0, 120)}`;
+    // Solo el tipo de error: el mensaje puede contener valores secretos de la configuración.
+    const reason = String(error?.name || 'Error');
     console.error(`Reservation crashed during ${stage}:`, reason);
     return json({
       error: `No se pudo confirmar la reserva (falló la ${stage}). Actualiza el tablero antes de volver a intentarlo.`,

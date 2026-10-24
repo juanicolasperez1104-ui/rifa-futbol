@@ -11,6 +11,8 @@ export async function supabase(env, path, init = {}) {
   const base = env.SUPABASE_URL?.replace(/\/$/, '');
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) return { response: null, error: 'Database is not configured.' };
+  // Nunca se incluye el valor de las variables en el mensaje: pueden ser secretos.
+  if (!/^https:\/\/[^\s/]+/i.test(base)) return { response: null, error: 'SUPABASE_URL debe ser la dirección del proyecto (https://xxxx.supabase.co), revisa las variables en Cloudflare.' };
   // Supabase sb_secret_* keys are API keys, not JWTs, so send them in apikey only.
   // Legacy service_role JWTs still need Authorization: Bearer for PostgREST.
   const authHeaders = key.startsWith('sb_secret_') ? {} : { Authorization: `Bearer ${key}` };
